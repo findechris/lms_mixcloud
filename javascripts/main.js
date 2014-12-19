@@ -23,10 +23,9 @@ var get_params = function(search_string) {
 
 var params = get_params(location.search);
 console.log(params);
-var testurl = "https://www.mixcloud.com/oauth/authorize?client_id=Js32JMBmKGRg4zjHrY&redirect_uri=http://findechris.github.io/lms_mixcloud/";
+var testurl = "https://www.mixcloud.com/oauth/authorize?client_id=Js32JMBmKGRg4zjHrY&redirect_uri=http://findechris.github.io/lms_mixcloud/app.html";
 if(params["code"]){
-	var url = "https://www.mixcloud.com/oauth/access_token?client_id=Js32JMBmKGRg4zjHrY&redirect_uri=http://findechris.github.io/lms_mixcloud/&client_secret=E3uDXKnsMdWjxJMRtkY3e52JZfUAGnwM&code="+params["code"];
-	$("#myparam").html('<a href="'+url+'">Get Token</a>');	
+	$("#myparam").html(params["code"]);
 }else{
-	$("#myparam").html(params["access_token"]);
+	window.location = testurl;
 }
