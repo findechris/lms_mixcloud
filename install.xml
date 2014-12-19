@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+
+<extension>
+	<name>PLUGIN_MIXCLOUD</name>
+	<module>Plugins::MixCloud::Plugin</module>
+	<version>0.8.2.20</version>
+	<description>PLUGIN_MIXCLOUD_DESC</description>
+	<icon>plugins/MixCloud/icon.png</icon>
+	<defaultState>enabled</defaultState>
+	<targetApplication>
+		<id>SlimServer</id>
+		<minVersion>7.6</minVersion>
+        	<maxVersion>7.*</maxVersion>
+	</targetApplication>
+  	<optionsURL>plugins/MixCloud/settings/basic.html</optionsURL>
+  	<creator>Christian Mueller</creator>
+  	<email></email>
+</extension>
