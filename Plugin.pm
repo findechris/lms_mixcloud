@@ -98,7 +98,7 @@ sub _makeMetadata {
 	my $dminutesrest = int($dminutes-$dhours*60);
 	my $DATA = {
 		duration => $dhours."h".$dminutesrest."m",
-		name => ($json->{'created_time'}?substr($json->{'created_time'},0,10)." : ":"").$json->{'name'},
+		name => $json->{'name'}.($json->{'created_time'}?" : ".substr($json->{'created_time'},0,10):""),
 		title => $json->{'name'},
 		#label => substr($json->{'created_time'},0,10),
 		artists => $json->{'user'}->{'username'},
@@ -106,16 +106,15 @@ sub _makeMetadata {
 		album => $json->{'user'}->{'name'},
 		play => "mixcloud:/" . $json->{'key'},
 		bitrate => '320/70',
-		url => \&_fetchMeta,
+		#url => \&_fetchMeta,
 		passthrough => [ { key => $json->{'key'}} ],
-		#type => 'audio',
+		type => 'audio',
 		#line1 => $json->{'name'},
 		#line2 => $json->{'name'},
 		icon => $icon,
 		image => $icon,
 		cover => $icon,
-	};
-
+	};	
 	return $DATA;
 }
 
@@ -132,9 +131,10 @@ sub _fetchMeta {
 				$log->warn($@);
 			}				
 			$log->debug("got meta for $fetchURL");
-			my $meta = _makeMetadata($track);
-			#$meta->{"items"} = [_makeMetadata($track)];
-			$callback->($meta);
+			my $meta ={name => "hallo"};# _makeMetadata($track);
+			#$meta->{'name'} = "hallo";
+			#%meta{"items"} = [_makeMetadata($track)];
+			$callback->(_makeMetadata($track));
 		}, 
 		
 		sub {
@@ -377,10 +377,10 @@ sub initPlugin {
 		Plugins::MixCloud::Settings->new;
 	}
 
-	#Slim::Formats::RemoteMetadata->registerProvider(
-	#	match => qr/mixcloud\.com/,
-	#	func => \&metadata_provider,
-	#);*/
+	Slim::Formats::RemoteMetadata->registerProvider(
+		match => qr/mixcloud/,
+		func => \&_fetchMeta,
+	);
 
 	Slim::Player::ProtocolHandlers->registerHandler(
 		mixcloud => 'Plugins::MixCloud::ProtocolHandler'

@@ -10,7 +10,6 @@ package Plugins::MixCloud::ProtocolHandler;
 use strict;
 
 use base qw(Slim::Formats::RemoteStream);
-#use base qw(Plugins::MixCloud::HTTP);
 use List::Util qw(min max);
 use LWP::Simple;
 use LWP::UserAgent;
@@ -32,6 +31,7 @@ my $log   = logger('plugin.mixcloud');
 
 use strict;
 Slim::Player::ProtocolHandlers->registerHandler('mixcloud', __PACKAGE__);
+Slim::Player::ProtocolHandlers->registerHandler('mixcloudd' => 'Plugins::MixCloud::ProtocolHandlerDirect');
 my $prefs = preferences('plugin.mixcloud');
 $prefs->init({ playformat => "mp3"});
 
@@ -44,17 +44,18 @@ sub new {
 	my $streamUrl = $song->streamUrl() || return;
 	my $track     = $song->pluginData();
 	$log->info( 'Remote streaming Mixcloud track: ' . $streamUrl );
+	
 	my $self = $class->open({
 		url => $streamUrl,
 		song    => $song,
 		client  => $client,
 	});
 
-	if (defined($self)) {
-		${*$self}{'client'}  = $client;
-		${*$self}{'song'}  = $song;
-		${*$self}{'url'}     = $streamUrl;
-	}
+	#if (defined($self)) {
+	#	${*$self}{'client'}  = $client;
+	#	${*$self}{'song'}  = $song;
+	#	${*$self}{'url'}     = $streamUrl;
+	#}
 
 	return $self;
 }
@@ -82,7 +83,7 @@ sub getNextTrack {
 
 sub getTrackUrl{
 	my $url = shift;
-	my ($trackhome) = $url =~ m{^mixcloud://(.*)$};
+	my ($trackhome) = $url =~ m{^mixcloud:/(.*)$};
 	#$log->debug("Fetching Trackhome:".$trackhome);	
 	my $cache = Slim::Utils::Cache->new;	
 	my $trackurl = "";
@@ -164,7 +165,6 @@ sub getTrackUrl{
 	return $trackdata;
 }
 sub getMetadataFor {
-	# don't use $_[3] as it is forceCurrent used by AudioScrobbler
 	my ($class, $client, $url, undef, $fetch) = @_;
 	$log->debug("getMetadataFor: ".$url);
 	my $track = Slim::Schema::RemoteTrack->fetch($url);
@@ -175,6 +175,7 @@ sub getMetadataFor {
 			album    => $track->album,
 			duration => $track->secs,
 			icon     => $track->cover,
+			image => $track->cover,
 			cover    => $track->cover,
 			bitrate  => $track->bitrate,
 			type     => $track->stash->{'format'}.' Mixcloud',
@@ -195,7 +196,7 @@ sub _fetchMeta {
 	
 	my ($trackhome) = $url =~ m{^mixcloud://(.*)$};
 	my $fetchURL = "http://api.mixcloud.com/" . $trackhome ;
-	$log->debug("fetching meta for $url with $fetchURL");
+	$log->debug("-------------------------------------------------------------------fetching meta for $url with $fetchURL");
 	Slim::Networking::SimpleAsyncHTTP->new(
 		
 		sub {
@@ -210,11 +211,15 @@ sub _fetchMeta {
 			#my $format = substr($trackurl,-3);
 			my $secs = int($track->{'audio_length'});
 			my $icon = "";
-			if (defined $track->{'pictures'}->{'medium'}) {
-				$icon = $track->{'pictures'}->{'medium'};
+			if (defined $track->{'pictures'}->{'large'}) {
+				$icon = $track->{'pictures'}->{'large'};
+			}else{
+				if (defined $track->{'pictures'}->{'medium'}) {
+					$icon = $track->{'pictures'}->{'medium'};
+				}
 			}
 			$obj = Slim::Schema::RemoteTrack->updateOrCreate($url, {
-				title   => $track->{'name'},
+				title   => $track->{'name'}." : ".($track->{'created_time'}?" : ".substr($track->{'created_time'},0,10):""),
 				artist  => $track->{'user'}->{'username'},
 				album   => $track->{'user'}->{'name'},
 				secs    => $secs,
@@ -252,15 +257,35 @@ sub trackInfoURL {
 	$log->info("trackInfoURL: " . $url);
 	return undef;
 }
-sub canDirectStreamSong {
-	my ( $class, $client, $song ) = @_;
 
-	# We need to check with the base class (HTTP) to see if we
-	# are synced or if the user has set mp3StreamingMethod
+sub canDirectStreamSong{
+	my ($classOrSelf, $client, $song, $inType) = @_;
+	
+	# When synced, we don't direct stream so that the server can proxy a single
+	# stream for all players
+	if ( $client->isSynced(1) ) {
+
+		if ( main::INFOLOG && $log->is_info ) {
+			$log->info(sprintf(
+				"[%s] Not direct streaming because player is synced", $client->id
+			));
+		}
+
+		return 0;
+	}
+
+	# Allow user pref to select the method for streaming
+	if ( my $method = $prefs->client($client)->get('mp3StreamingMethod') ) {
+		if ( $method == 1 ) {
+			main::DEBUGLOG && $log->debug("Not direct streaming because of mp3StreamingMethod pref");
+			return 0;
+		}
+	}
 	my $ret = $song->streamUrl();
+	my ($server, $port, $path, $user, $password) = Slim::Utils::Misc::crackURL($ret);
+	my $host = $port == 80 ? $server : "$server:$port";
 	#$song->currentTrack()->url = $ret;
-	#$log->info($ret);
-	return 0;
+	return "mixcloudd://$host:$port$path";
 }
 # If an audio stream fails, keep playing
 sub handleDirectError {
