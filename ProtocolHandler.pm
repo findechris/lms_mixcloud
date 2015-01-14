@@ -219,7 +219,7 @@ sub _fetchMeta {
 				}
 			}
 			$obj = Slim::Schema::RemoteTrack->updateOrCreate($url, {
-				title   => $track->{'name'}." : ".($track->{'created_time'}?" : ".substr($track->{'created_time'},0,10):""),
+				title   => $track->{'name'}.($track->{'created_time'}?" : ".substr($track->{'created_time'},0,10):""),
 				artist  => $track->{'user'}->{'username'},
 				album   => $track->{'user'}->{'name'},
 				secs    => $secs,

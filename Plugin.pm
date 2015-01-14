@@ -201,10 +201,17 @@ sub tracksHandler {
 				$params = "";
 			}			
 		}
+		
 		if ($searchType eq 'search') {
 			$resource = "search";
 			$params = "q=".$args->{'search'}."&type=cloudcast"; 
 		}
+		
+		if ($searchType eq 'usersearch') {
+			$resource = "search";
+			$params = "q=".$args->{'search'}."&type=user"; 
+		}
+		
 		if ($searchType eq 'tags') {
 			if ($params eq "") {
 				$resource = "search";
@@ -214,21 +221,15 @@ sub tracksHandler {
 				$params = "";
 			}			 
 		}
-
-		if ($token ne "") {
-			if ($searchType eq 'following') {
-				$resource = "me/following";
-			}
-			if ($searchType eq 'favorites') {
-				$resource = "me/favorites";
-			}
-			if ($searchType eq 'cloudcasts') {
-				$resource = "me/cloudcasts";
-			}
-			$method = "https";
-			$params .= "&access_token=" . $token;
-			
-			
+		if ($searchType eq 'following' || $searchType eq 'favorites' || $searchType eq 'cloudcasts' || $searchType eq 'user') {
+			$resource = $params;
+			$params = '';
+			if (substr($resource,0,2) eq 'me') {
+				if ($token ne "") {
+					$method = "https";
+					$params .= "&access_token=" . $token;
+				}				
+			}		
 		}
 		
 		my $queryUrl = "$method://api.mixcloud.com/$resource?offset=$i&limit=$quantity&" . $params;
@@ -256,14 +257,16 @@ sub tracksHandler {
 					$total = $index + @$menu;
 					$log->debug("short page, truncate total to $total");
 				}
-		
-				$callback->({
-					items  => $menu,
-					offset => $index,
-					total  => $total,
-				});
-			},
-			
+				if ($searchType eq 'user') {
+					$callback->($menu);
+				}else{
+					$callback->({
+						items  => $menu,
+						offset => $index,
+						total  => $total,
+					});
+				}
+			},			
 			sub {
 				$log->warn("error: $_[1]");
 				$callback->([ { name => $_[1], type => 'text' } ]);
@@ -344,6 +347,47 @@ sub _parseTags {
 	}
 }
 
+sub _parseUsers {
+	my ($json, $menu) = @_;
+	my $i = 0;
+	my $data = $json->{'data'};
+	for my $entry (@$data) {
+		my $name = $entry->{'name'};
+		my $username = $entry->{'username'};
+		my $key = substr($entry->{'key'},1);
+		my $icon = "";
+		if (defined $json->{'pictures'}->{'medium'}) {
+			$icon = $json->{'pictures'}->{'medium'};
+		}
+		push @$menu, {
+			name => $name,
+			type => 'link',
+			url => \&tracksHandler,
+			icon => $icon,
+			image => $icon,
+			cover => $icon,
+			passthrough => [ { type=>'user', params => $key,parser=>\&_parseUser} ]
+		};
+	}
+}
+
+sub _parseUser {
+	my ($json, $menu) = @_;
+	my $key = substr($json->{'key'},1);
+	push(@$menu, 
+		{ name => string('PLUGIN_MIXCLOUD_FOLLOWING')." (".$json->{'following_count'}.")", type => 'link',
+			url  => \&tracksHandler, passthrough => [ { type => 'following',params => $key."following",parser => \&_parseUsers } ] }
+	);
+	push(@$menu, 
+		{ name => string('PLUGIN_MIXCLOUD_FAVORITES')." (".$json->{'favorite_count'}.")", type => 'link',
+			url  => \&tracksHandler, passthrough => [ { type => 'favorites',params => $key."favorites" } ] }
+	);
+	push(@$menu, 
+		{ name => string('PLUGIN_MIXCLOUD_CLOUDCASTS')." (".$json->{'cloudcast_count'}.")", type => 'link',
+			url  => \&tracksHandler, passthrough => [ { type => 'cloudcasts',params => $key."cloudcasts"} ] }
+	);
+}
+
 sub _tagHandler {
 	my ($client, $callback, $args, $passDict) = @_;
 	my $params = $passDict->{'params'} || '';
@@ -410,12 +454,22 @@ sub toplevel {
 		
 		{ name => string('PLUGIN_MIXCLOUD_CATEGORIES'), type => 'link',   
 			url  => \&tracksHandler, passthrough => [ {type=>'categories',parser => \&_parseCategories } ], },
-
-		{ name => string('PLUGIN_MIXCLOUD_SEARCH'), type => 'search',   
-			url  => \&tracksHandler, passthrough => [ { type => 'search' } ], },
-
-		{ name => string('PLUGIN_MIXCLOUD_TAGS'), type => 'search',   
-			url  => \&tracksHandler, passthrough => [ { type => 'tags',parser => \&_parseTags } ], },
+		
+		{ name => string('PLUGIN_MIXCLOUD_MYSEARCH'), type => 'link',   
+			url  =>sub{
+				my ($client, $callback, $args) = @_;
+				my $searchcallbacks = [
+						{ name => string('PLUGIN_MIXCLOUD_SEARCH'), type => 'search',   
+							url  => \&tracksHandler, passthrough => [ { type => 'search' } ], },
+				
+						{ name => string('PLUGIN_MIXCLOUD_TAGS'), type => 'search',   
+							url  => \&tracksHandler, passthrough => [ { type => 'tags',parser => \&_parseTags } ], },
+						
+						{ name => string('PLUGIN_MIXCLOUD_SEARCH_USER'), type => 'search',   
+							url  => \&tracksHandler, passthrough => [ { type => 'usersearch',parser => \&_parseUsers } ], }
+				];				
+				$callback->($searchcallbacks);							
+			}, passthrough => [ { type => 'search' } ], }		
 	];
 
 	
@@ -425,20 +479,13 @@ sub toplevel {
 			 sub{
 				if ($token ne '') {
 					push(@$callbacks, 
-						{ name => string('PLUGIN_MIXCLOUD_FOLLOWING'), type => 'link',
-							url  => \&tracksHandler, passthrough => [ { type => 'following' } ] }
+						{ name => string('PLUGIN_MIXCLOUD_MYMIXCLOUD'), type => 'link',
+						url  => \&tracksHandler, passthrough => [ { type=>'user', params => 'me/',parser=>\&_parseUser} ] }						
 					);
-					push(@$callbacks, 
-						{ name => string('PLUGIN_MIXCLOUD_FAVORITES'), type => 'link',
-							url  => \&tracksHandler, passthrough => [ { type => 'favorites' } ] }
-					);
-					push(@$callbacks, 
-						{ name => string('PLUGIN_MIXCLOUD_CLOUDCASTS'), type => 'link',
-							url  => \&tracksHandler, passthrough => [ { type => 'cloudcasts'} ] }
-					);
+					
 				}
 				push(@$callbacks, 
-					{ name => string('PLUGIN_MIXCLOUD_URL'), type => 'search', url  => \&urlHandler, }
+					{ name => string('PLUGIN_MIXCLOUD_URL'), type => 'search', url  => \&urlHandler }
 				);
 				$callback->($callbacks);			
 			}
