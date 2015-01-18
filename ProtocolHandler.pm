@@ -132,10 +132,10 @@ sub getTrackUrl{
 			for (my $i=1; $i <= 50; $i++) {
 				$trackurl = "http://stream".$i.".mixcloud.com";
 				if($firstFormat eq "mp4"){
-					$format = "mp4";
+					$format = "mp3";
 					$trackurl = $trackurl.$mp3url;
 				}else{
-					$format = "mp3";
+					$format = "mp4";
 					$trackurl = $trackurl.$m4aurl;
 				}
 				my $response = $ua->head($trackurl);
@@ -207,8 +207,9 @@ sub _fetchMeta {
 			}
 
 			my $obj;					
-			$log->debug("caching meta for $url new track url ".$trackdata->{'url'});
-			#my $format = substr($trackurl,-3);
+			
+			my $format = substr($trackdata->{'url'},-3);
+			$log->debug("caching meta for $format with URL $url new track url ".$trackdata->{'url'});
 			my $secs = int($track->{'audio_length'});
 			my $icon = "";
 			if (defined $track->{'pictures'}->{'large'}) {
@@ -227,7 +228,7 @@ sub _fetchMeta {
 				bitrate   => ($trackdata->{'bitrate'}/1000).'k',
 				type      => $trackdata->{'format'}.' stream (mixcloud.com)',
 				tracknum=> 1,
-				stash => {format => $trackdata->{'format'},formaturl=>$trackdata->{'url'},bitrate=>$trackdata->{'bitrate'}}
+				stash => {format => $format,formaturl=>$trackdata->{'url'},bitrate=>$format eq "mp3"?320000:70000}
 			});			
 		}, 
 		
@@ -332,10 +333,12 @@ sub parseDirectHeaders {
 	}
 	
 	$contentType = Slim::Music::Info::mimeToType($contentType);
-	
+	$log->info("DIRECT HEADER: ".$contentType);
 	if ( !$contentType ) {
 		$contentType = 'mp3';
-	}
+	}elsif($contentType eq 'mp4'){
+		$contentType = 'aac';	
+	}	
 	return (undef, undef, undef, undef, $contentType);
 }
 sub parseHeaders {
