@@ -290,7 +290,7 @@ sub canDirectStreamSong{
 	my ($server, $port, $path, $user, $password) = Slim::Utils::Misc::crackURL($ret);
 	my $host = $port == 80 ? $server : "$server:$port";
 	#$song->currentTrack()->url = $ret;
-	return 0;#"mixcloudd://$host:$port$path";
+	return "mixcloudd://$host:$port$path";
 }
 # If an audio stream fails, keep playing
 sub handleDirectError {
