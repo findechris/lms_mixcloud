@@ -94,10 +94,12 @@ sub getTrackUrl{
 		#$log->debug ("got cache url". 'mixcloud_meta_urls ' . $trackhome);
 		if (defined $urldata->{$firstFormat."_url"}) {
 			$trackurl = $urldata->{$firstFormat."_url"};
+			$format = $firstFormat;
 		}else{
 			my $secondFormat = ($firstFormat eq "mp3"?"mp4":"mp3");
 			if (defined $urldata->{$secondFormat."_url"}) {
-				$trackurl = $urldata->{$secondFormat."_url"};		
+				$trackurl = $urldata->{$secondFormat."_url"};
+				$format = $secondFormat;
 			}
 		}
 	}
@@ -157,9 +159,11 @@ sub getTrackUrl{
 					$format."_url" => $trackurl
 				}
 			}		
-			$cache->set( 'mixcloud_meta_urls' . $trackhome, $urldata, 86400 );	
+			$cache->set( 'mixcloud_meta_urls' . $trackhome, $urldata, 86400 );
+			$log->info("-----------------------------------------------------------------------FOUND TRACK FORMAT $format URL: $trackurl");
 		}
 	}
+	
 	my $trackdata = {url=>$trackurl,format=>$format,bitrate=>$format eq "mp3"?320000:70000};
 	_fetchMeta($url,$trackdata);
 	return $trackdata;
@@ -286,7 +290,7 @@ sub canDirectStreamSong{
 	my ($server, $port, $path, $user, $password) = Slim::Utils::Misc::crackURL($ret);
 	my $host = $port == 80 ? $server : "$server:$port";
 	#$song->currentTrack()->url = $ret;
-	return "mixcloudd://$host:$port$path";
+	return 0;#"mixcloudd://$host:$port$path";
 }
 # If an audio stream fails, keep playing
 sub handleDirectError {
@@ -339,7 +343,7 @@ sub parseDirectHeaders {
 	}elsif($contentType eq 'mp4'){
 		$contentType = 'aac';	
 	}	
-	return (undef, undef, undef, undef, $contentType);
+	return (undef, undef, undef, undef, $contentType,$length);
 }
 sub parseHeaders {
 	my ($class, $client, $url, @headers) = @_;
