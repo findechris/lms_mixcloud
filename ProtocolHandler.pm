@@ -62,11 +62,17 @@ sub new {
 sub isPlaylistURL { 0 }
 sub isRemote { 1 }
 
-sub getFormatForURL {
-	my ($class, $url) = @_;		
+#sub getFormatForURL {
+#	my ($class, $url) = @_;		
 	#my ($trackId) = $url =~ m{^mixcloud://(.*)$};
-	my $trackinfo = getTrackUrl($url);
-	return $trackinfo->{'format'};	
+	#my $trackinfo = getTrackUrl($url);
+	#return $trackinfo->{'format'};	
+#}
+sub formatOverride {
+	my ($class, $song) = @_;
+	my $url = $song->currentTrack()->url;
+	$log->debug("-----------------------------------------------------Format Override Songurl: ".$url);
+	return $song->_streamFormat();
 }
 
 sub getNextTrack {
@@ -77,6 +83,7 @@ sub getNextTrack {
 	my $trackinfo = getTrackUrl($url);
 	$log->debug("formaturl: ".$trackinfo->{'url'});
 	$song->bitrate($trackinfo->{'bitrate'});
+	$song->_streamFormat($trackinfo->{'format'});
 	$song->streamUrl($trackinfo->{'url'});
 	$successCb->();
 }
@@ -165,14 +172,22 @@ sub getTrackUrl{
 	}
 	
 	my $trackdata = {url=>$trackurl,format=>$format,bitrate=>$format eq "mp3"?320000:70000};
-	_fetchMeta($url,$trackdata);
+	my $track = Slim::Schema::RemoteTrack->fetch($url);
+	if ($track) {
+		my $obj = Slim::Schema::RemoteTrack->updateOrCreate($url, {
+					bitrate   => ($trackdata->{'bitrate'}/1000).'k',
+					type      => $trackdata->{'format'}.' stream (mixcloud.com)',
+					stash => {format => $trackdata->{'format'},formaturl=>$trackdata->{'url'},bitrate=>$trackdata->{'bitrate'}}
+				});
+	}
 	return $trackdata;
 }
 sub getMetadataFor {
 	my ($class, $client, $url, undef, $fetch) = @_;
 	$log->debug("getMetadataFor: ".$url);
-	my $track = Slim::Schema::RemoteTrack->fetch($url);
-	if ($track && $track->stash->{'format'}) {	
+	my $track = Slim::Schema::RemoteTrack->fetch($url);	
+	if ($track && $track->stash->{'meta'}) {
+		$log->debug("----------------------------------getMetadataFor TRACK TITLE: ".$track->cover);
 		my $ret = {
 			title    => $track->title,
 			artist   => $track->artist,
@@ -188,15 +203,14 @@ sub getMetadataFor {
 		};
 		return $ret;
 	} else {
-		$log->info("fetch of meta for $url");
-		getTrackUrl($url);
+		$log->info("---------------------------------------------------------------------------fetch of meta for $url");
+		_fetchMeta($url);
 	}
 	return {};
 }
 
 sub _fetchMeta {
 	my $url    = shift;
-	my $trackdata = shift;
 	
 	my ($trackhome) = $url =~ m{^mixcloud://(.*)$};
 	my $fetchURL = "http://api.mixcloud.com/" . $trackhome ;
@@ -210,10 +224,11 @@ sub _fetchMeta {
 				$log->warn($@);
 			}
 
-			my $obj;					
-			
-			my $format = substr($trackdata->{'url'},-3);
-			$log->debug("caching meta for $format with URL $url new track url ".$trackdata->{'url'});
+			my $obj;
+			my $format = "mp3";
+			my $trackurl = "";
+			my $bitrate = 70000;		
+			$log->debug("caching meta for $format with URL $url new track url ".$trackurl);
 			my $secs = int($track->{'audio_length'});
 			my $icon = "";
 			if (defined $track->{'pictures'}->{'large'}) {
@@ -228,11 +243,9 @@ sub _fetchMeta {
 				artist  => $track->{'user'}->{'username'},
 				album   => $track->{'user'}->{'name'},
 				secs    => $secs,
-				cover   => $icon,
-				bitrate   => ($trackdata->{'bitrate'}/1000).'k',
-				type      => $trackdata->{'format'}.' stream (mixcloud.com)',
+				cover   => $icon,				
 				tracknum=> 1,
-				stash => {format => $format,formaturl=>$trackdata->{'url'},bitrate=>$format eq "mp3"?320000:70000}
+				stash => {meta => 1}
 			});			
 		}, 
 		
@@ -290,6 +303,7 @@ sub canDirectStreamSong{
 	my ($server, $port, $path, $user, $password) = Slim::Utils::Misc::crackURL($ret);
 	my $host = $port == 80 ? $server : "$server:$port";
 	#$song->currentTrack()->url = $ret;
+	#return 0;
 	return "mixcloudd://$host:$port$path";
 }
 # If an audio stream fails, keep playing
@@ -313,7 +327,7 @@ sub getIcon {
 }
 sub parseDirectHeaders {
 	my ($class, $client, $url, @headers) = @_;
-	my ($redir, $contentType, $length);
+	my ($redir, $contentType, $length,$bitrate);
 	foreach my $header (@headers) {
 	
 		# Tidy up header to make no stray nulls or \n have been left by caller.
@@ -342,8 +356,9 @@ sub parseDirectHeaders {
 		$contentType = 'mp3';
 	}elsif($contentType eq 'mp4'){
 		$contentType = 'aac';	
-	}	
-	return (undef, undef, undef, undef, $contentType,$length);
+	}
+	$bitrate = $contentType eq "mp3"?320000:70000;
+	return (undef, $bitrate, undef, undef, $contentType,$length);
 }
 sub parseHeaders {
 	my ($class, $client, $url, @headers) = @_;
