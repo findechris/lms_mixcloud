@@ -1,4 +1,4 @@
-# Mixcloud Plugin for Logitech Squeezbox media server #
+# Mixcloud Plugin for Logitech Squeezebox media server #
 
 This is a Logitech Media Server (LMS) (a.k.a Squeezebox server) plugin to play
 tracks from MixCloud. To install make a folder named MixCloud in the Plugin Directory of the Logitech Media Server

@@ -68,10 +68,11 @@ sub getFormatForURL {
 	my $trackinfo = getTrackUrl($url);
 	return $trackinfo->{'format'};	
 }
+
 #sub formatOverride {
 #	my ($class, $song) = @_;
 #	my $url = $song->currentTrack()->url;
-#	$log->debug("-----------------------------------------------------Format Override Songurl: ".$url);
+#	$log->debug("-----------------------------------------------------Format Override Songurl: ".$song->_streamFormat()."-----".$url);
 #	return $song->_streamFormat();
 #}
 
