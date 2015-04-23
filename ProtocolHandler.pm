@@ -62,18 +62,18 @@ sub new {
 sub isPlaylistURL { 0 }
 sub isRemote { 1 }
 
-#sub getFormatForURL {
-#	my ($class, $url) = @_;		
-	#my ($trackId) = $url =~ m{^mixcloud://(.*)$};
-	#my $trackinfo = getTrackUrl($url);
-	#return $trackinfo->{'format'};	
-#}
-sub formatOverride {
-	my ($class, $song) = @_;
-	my $url = $song->currentTrack()->url;
-	$log->debug("-----------------------------------------------------Format Override Songurl: ".$url);
-	return $song->_streamFormat();
+sub getFormatForURL {
+	my ($class, $url) = @_;		
+	my ($trackId) = $url =~ m{^mixcloud://(.*)$};
+	my $trackinfo = getTrackUrl($url);
+	return $trackinfo->{'format'};	
 }
+#sub formatOverride {
+#	my ($class, $song) = @_;
+#	my $url = $song->currentTrack()->url;
+#	$log->debug("-----------------------------------------------------Format Override Songurl: ".$url);
+#	return $song->_streamFormat();
+#}
 
 sub getNextTrack {
 	my ($class, $song, $successCb, $errorCb) = @_;
@@ -111,13 +111,17 @@ sub getTrackUrl{
 		}
 	}
 	if ($trackurl eq "") {
-		my $url = "http://www.mixcloud.com/".$trackhome;
-		my $content = get($url);
-		$content =~ m/(?<=\.mixcloud\.com\/previews\/)([^\.]+\.mp3)/i;
 		my $ua = LWP::UserAgent->new;
-		$ua->timeout(5);
+		$ua->agent("Mozilla/5.0 (Windows NT 6.3; WOW64; rv:33.0) Gecko/20100101 Firefox/33.0");
+		my $url = "https://www.mixcloud.com/".$trackhome;
+		#my $content = get($url);
+		my $response = $ua->get($url);
+		$log->info("#####################################################################Got Mixcloud CONTENT:".$response->decoded_content);
+		my $content = $response->decoded_content;
+		$content =~ m/(?<=\.mixcloud\.com\/previews\/)([^\.]+\.mp3)/i;			
 		my $trackid = substr($1,0,-4);
-		#$log->info("Got Mixcloud TrackId:".$trackid);
+		$ua->timeout(5);
+		$log->info("################################################Got Mixcloud TrackId:".$1);
 		my $found = 0;
 		my $m4aurl = "/c/m4a/64/".$trackid.".m4a";
 		my $mp3url = "/c/originals/".$trackid.".mp3";
